@@ -232,6 +232,50 @@ contract ForkTest is Test {
         assertGt(decodedResult, 20_000_000);
     }
 
+    struct Withdrawal {
+        address addr;
+        bytes amount;
+        bytes index;
+        bytes validatorIndex;
+    }
+
+    struct BlockResult {
+        bytes baseFeePerGas;
+        bytes blobGasUsed;
+        bytes difficulty;
+        bytes excessBlobGas;
+        bytes extraData;
+        bytes gasLimit;
+        bytes gasUsed;
+        bytes hash;
+        bytes logsBloom;
+        bytes miner;
+        bytes mixHash;
+        bytes nonce;
+        bytes number;
+        bytes parentBeaconBlockRoot;
+        bytes parentHash;
+        bytes receiptsRoot;
+        bytes sha3Uncles;
+        bytes size;
+        bytes stateRoot;
+        bytes timestamp;
+        bytes32[] transactions;
+        bytes transactionsRoot;
+        bytes[] uncles;
+        Withdrawal[] withdrawals;
+        bytes withdrawalsRoot;
+    }
+
+    function testRpcBlockByNumberFullReturndata() public {
+        bytes memory data = vm.rpc("sepolia", "eth_getBlockByNumber", '["0x588b24", false]');
+        BlockResult memory blockResult = abi.decode(data, (BlockResult));
+        assertEq(bytes32(blockResult.hash), bytes32(hex"50b08560cfeef4a4005333a78bef1190f3d8708a074c549e0e5d834c6d7eab3f"), "hash mismatch");
+        assertEq(blockResult.withdrawals.length, 16, "withdrawals length mismatch");
+        assertEq(blockResult.withdrawals[0].addr, 0x25c4a76E7d118705e7Ea2e9b7d8C59930d8aCD3b, "withdrawal address mismatch");
+        assertEq(blockResult.transactions.length, 133, "transactions length mismatch");
+    }
+
     // <https://github.com/foundry-rs/foundry/issues/7858>
     function testRpcTransactionByHash() public {
         string memory param = string.concat('["0xe1a0fba63292976050b2fbf4379a1901691355ed138784b4e0d1854b4cf9193e"]');
