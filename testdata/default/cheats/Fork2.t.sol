@@ -270,16 +270,29 @@ contract ForkTest is Test {
     function testRpcBlockByNumberFullReturndata() public {
         bytes memory data = vm.rpc("sepolia", "eth_getBlockByNumber", '["0x588b24", false]');
         BlockResult memory blockResult = abi.decode(data, (BlockResult));
+        // Verify block hash
         assertEq(
             bytes32(blockResult.hash),
             bytes32(hex"50b08560cfeef4a4005333a78bef1190f3d8708a074c549e0e5d834c6d7eab3f"),
             "hash mismatch"
         );
+        // Verify parent hash
+        assertEq(
+            bytes32(blockResult.parentHash),
+            bytes32(hex"ee012f100cea384420e993e4eab8c3cf0ed35a49f75769eb8a37c9e0c93ea235"),
+            "parentHash mismatch"
+        );
+        // Verify block number (0x588b24)
+        assertEq(blockResult.number, hex"588b24", "number mismatch");
+        // Verify nested struct arrays
         assertEq(blockResult.withdrawals.length, 16, "withdrawals length mismatch");
         assertEq(
             blockResult.withdrawals[0].addr, 0x25c4a76E7d118705e7Ea2e9b7d8C59930d8aCD3b, "withdrawal address mismatch"
         );
+        // Verify transaction hashes array
         assertEq(blockResult.transactions.length, 133, "transactions length mismatch");
+        // Verify uncles array (should be empty for this block)
+        assertEq(blockResult.uncles.length, 0, "uncles should be empty");
     }
 
     function testRpcClientVersion() public {
@@ -294,10 +307,57 @@ contract ForkTest is Test {
         assertTrue(listening, "net_listening should return true");
     }
 
+    // Verify abi.decode works for eth_chainId (simple hex scalar to uint).
+    function testRpcChainId() public {
+        bytes memory data = vm.rpc("sepolia", "eth_chainId", "[]");
+        // Sepolia chain ID is 11155111 (0xaa36a7)
+        assertEq(data, hex"aa36a7", "chain ID mismatch");
+    }
+
+    // Verify null response handling (eth_getBlockByNumber for a non-existent future block).
+    function testRpcNullResponse() public {
+        bytes memory data = vm.rpc("sepolia", "eth_getBlockByNumber", '["0xffffffffffffff", false]');
+        // Null responses are encoded as zero bytes32
+        assertEq(data.length, 32, "null should encode as bytes32");
+    }
+
+    // Struct matching a legacy (type 0) transaction fields sorted alphabetically.
+    struct LegacyTransactionResult {
+        bytes blockHash;
+        bytes blockNumber;
+        bytes blockTimestamp;
+        bytes chainId;
+        address from;
+        bytes gas;
+        bytes gasPrice;
+        bytes hash;
+        bytes input;
+        bytes nonce;
+        bytes r;
+        bytes s;
+        address to;
+        bytes transactionIndex;
+        bytes type_;
+        bytes v;
+        bytes value;
+    }
+
+    // Verify struct decoding for transaction objects (original issue #7858).
     // <https://github.com/foundry-rs/foundry/issues/7858>
     function testRpcTransactionByHash() public {
-        string memory param = string.concat('["0xe1a0fba63292976050b2fbf4379a1901691355ed138784b4e0d1854b4cf9193e"]');
-        vm.rpc("sepolia", "eth_getTransactionByHash", param);
+        bytes memory data =
+            vm.rpc("sepolia", "eth_getTransactionByHash", '["0xe1a0fba63292976050b2fbf4379a1901691355ed138784b4e0d1854b4cf9193e"]');
+        LegacyTransactionResult memory txn = abi.decode(data, (LegacyTransactionResult));
+        // Verify known transaction fields
+        assertEq(
+            bytes32(txn.hash),
+            bytes32(hex"e1a0fba63292976050b2fbf4379a1901691355ed138784b4e0d1854b4cf9193e"),
+            "tx hash mismatch"
+        );
+        assertEq(txn.from, 0x8Be6209bC9BD1a8e6e015ADe090F6BE7BE6f032A, "tx from mismatch");
+        assertEq(txn.to, 0xF04fd9a66DE511BC389D3b830C1F850a4A4A8c61, "tx to mismatch");
+        // Verify block number matches the block from testRpcBlockByNumberFullReturndata
+        assertEq(txn.blockNumber, hex"588b24", "tx blockNumber mismatch");
     }
 }
 
