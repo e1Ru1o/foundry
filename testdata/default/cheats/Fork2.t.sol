@@ -270,9 +270,15 @@ contract ForkTest is Test {
     function testRpcBlockByNumberFullReturndata() public {
         bytes memory data = vm.rpc("sepolia", "eth_getBlockByNumber", '["0x588b24", false]');
         BlockResult memory blockResult = abi.decode(data, (BlockResult));
-        assertEq(bytes32(blockResult.hash), bytes32(hex"50b08560cfeef4a4005333a78bef1190f3d8708a074c549e0e5d834c6d7eab3f"), "hash mismatch");
+        assertEq(
+            bytes32(blockResult.hash),
+            bytes32(hex"50b08560cfeef4a4005333a78bef1190f3d8708a074c549e0e5d834c6d7eab3f"),
+            "hash mismatch"
+        );
         assertEq(blockResult.withdrawals.length, 16, "withdrawals length mismatch");
-        assertEq(blockResult.withdrawals[0].addr, 0x25c4a76E7d118705e7Ea2e9b7d8C59930d8aCD3b, "withdrawal address mismatch");
+        assertEq(
+            blockResult.withdrawals[0].addr, 0x25c4a76E7d118705e7Ea2e9b7d8C59930d8aCD3b, "withdrawal address mismatch"
+        );
         assertEq(blockResult.transactions.length, 133, "transactions length mismatch");
     }
 
