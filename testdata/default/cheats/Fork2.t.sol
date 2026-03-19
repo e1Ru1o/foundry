@@ -279,7 +279,7 @@ contract ForkTest is Test {
     function testRpcClientVersion() public {
         bytes memory data = vm.rpc("sepolia", "web3_clientVersion", "[]");
         string memory clientVersion = abi.decode(data, (string));
-        assertGt(clientVersion.length, 0, "clientVersion should not be empty");
+        assertGt(bytes(clientVersion).length, 0, "clientVersion should not be empty");
     }
 
     function testRpcNetListening() public {
