@@ -276,6 +276,18 @@ contract ForkTest is Test {
         assertEq(blockResult.transactions.length, 133, "transactions length mismatch");
     }
 
+    function testRpcClientVersion() public {
+        bytes memory data = vm.rpc("sepolia", "web3_clientVersion", "[]");
+        string memory clientVersion = abi.decode(data, (string));
+        assertGt(clientVersion.length, 0, "clientVersion should not be empty");
+    }
+
+    function testRpcNetListening() public {
+        bytes memory data = vm.rpc("sepolia", "net_listening", "[]");
+        bool listening = abi.decode(data, (bool));
+        assertTrue(listening, "net_listening should return true");
+    }
+
     // <https://github.com/foundry-rs/foundry/issues/7858>
     function testRpcTransactionByHash() public {
         string memory param = string.concat('["0xe1a0fba63292976050b2fbf4379a1901691355ed138784b4e0d1854b4cf9193e"]');
