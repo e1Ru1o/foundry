@@ -327,7 +327,7 @@ contract ForkTest is Test {
         bytes blockNumber;
         bytes blockTimestamp;
         bytes chainId;
-        address from;
+        bytes from;
         bytes gas;
         bytes gasPrice;
         bytes hash;
@@ -335,7 +335,7 @@ contract ForkTest is Test {
         bytes nonce;
         bytes r;
         bytes s;
-        address to;
+        bytes to;
         bytes transactionIndex;
         bytes type_;
         bytes v;
@@ -345,8 +345,11 @@ contract ForkTest is Test {
     // Verify struct decoding for transaction objects (original issue #7858).
     // <https://github.com/foundry-rs/foundry/issues/7858>
     function testRpcTransactionByHash() public {
-        bytes memory data =
-            vm.rpc("sepolia", "eth_getTransactionByHash", '["0xe1a0fba63292976050b2fbf4379a1901691355ed138784b4e0d1854b4cf9193e"]');
+        bytes memory data = vm.rpc(
+            "sepolia",
+            "eth_getTransactionByHash",
+            '["0xe1a0fba63292976050b2fbf4379a1901691355ed138784b4e0d1854b4cf9193e"]'
+        );
         LegacyTransactionResult memory txn = abi.decode(data, (LegacyTransactionResult));
         // Verify known transaction fields
         assertEq(
@@ -354,8 +357,8 @@ contract ForkTest is Test {
             bytes32(hex"e1a0fba63292976050b2fbf4379a1901691355ed138784b4e0d1854b4cf9193e"),
             "tx hash mismatch"
         );
-        assertEq(txn.from, 0x8Be6209bC9BD1a8e6e015ADe090F6BE7BE6f032A, "tx from mismatch");
-        assertEq(txn.to, 0xF04fd9a66DE511BC389D3b830C1F850a4A4A8c61, "tx to mismatch");
+        assertEq(address(bytes20(txn.from)), 0x8Be6209bC9BD1a8e6e015ADe090F6BE7BE6f032A, "tx from mismatch");
+        assertEq(address(bytes20(txn.to)), 0xF04fd9a66DE511BC389D3b830C1F850a4A4A8c61, "tx to mismatch");
         // Verify block number matches the block from testRpcBlockByNumberFullReturndata
         assertEq(txn.blockNumber, hex"588b24", "tx blockNumber mismatch");
     }
