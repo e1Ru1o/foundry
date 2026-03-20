@@ -325,7 +325,6 @@ contract ForkTest is Test {
     struct LegacyTransactionResult {
         bytes blockHash;
         bytes blockNumber;
-        bytes blockTimestamp;
         bytes chainId;
         bytes from;
         bytes gas;
