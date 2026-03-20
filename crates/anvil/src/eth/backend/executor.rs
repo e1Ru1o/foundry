@@ -312,7 +312,7 @@ impl AnvilBlockExecutorFactory {
 /// Builds the per-tx `OpTransaction<TxEnv>` from a pending transaction, replicating the logic
 /// from `TransactionExecutor::env_for`.
 pub fn build_tx_env_for_pending(
-    tx: &PendingTransaction,
+    tx: &PendingTransaction<FoundryTxEnvelope>,
     cheats: &CheatsManager,
     networks: NetworkConfigs,
     _evm_env: &EvmEnv,
@@ -356,7 +356,7 @@ pub fn build_tx_env_for_pending(
 }
 
 /// Creates a database with given database and inspector.
-pub fn new_evm_with_inspector<DB, I>(
+pub fn new_eth_evm_with_inspector<DB, I>(
     db: DB,
     env: &Env,
     inspector: I,

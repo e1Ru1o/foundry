@@ -3,7 +3,7 @@
 use crate::{
     EthInspectorExt, FoundryBlock, FoundryTransaction,
     constants::{CALLER, CHEATCODE_ADDRESS, DEFAULT_CREATE2_DEPLOYER, TEST_CONTRACT_ADDRESS},
-    evm::new_evm_with_inspector,
+    evm::new_eth_evm_with_inspector,
     fork::{CreateFork, ForkId, MultiFork},
     state_snapshot::StateSnapshots,
     utils::get_blob_base_fee_update_fraction,
@@ -20,12 +20,12 @@ use eyre::Context;
 use foundry_common::{SYSTEM_TRANSACTION_TYPE, is_known_system_sender};
 pub use foundry_fork_db::{BlockchainDb, SharedBackend, cache::BlockchainDbMeta};
 use revm::{
-    Database, DatabaseCommit, Journal, JournalEntry,
+    Database, DatabaseCommit, JournalEntry,
     bytecode::Bytecode,
-    context::{BlockEnv, Cfg, ContextTr, JournalInner, TxEnv},
+    context::{BlockEnv, JournalInner, TxEnv},
     context_interface::{journaled_state::account::JournaledAccountTr, result::ResultAndState},
     database::{CacheDB, DatabaseRef},
-    inspector::{JournalExt, NoOpInspector},
+    inspector::NoOpInspector,
     precompile::{PrecompileSpecId, Precompiles},
     primitives::{HashMap as Map, KECCAK_EMPTY, Log, hardfork::SpecId},
     state::{Account, AccountInfo, EvmState, EvmStorageSlot},
@@ -79,7 +79,7 @@ pub type JournaledState = JournalInner<JournalEntry>;
 
 /// An extension trait that allows us to easily extend the `revm::Inspector` capabilities
 #[auto_impl::auto_impl(&mut)]
-pub trait DatabaseExt<Spec = SpecId, Block = BlockEnv, Tx = TxEnv>:
+pub trait DatabaseExt<BLOCK = BlockEnv, TX = TxEnv, SPEC = SpecId>:
     Database<Error = DatabaseError> + DatabaseCommit + Debug
 {
     /// Creates a new state snapshot at the current point of execution.
@@ -90,7 +90,7 @@ pub trait DatabaseExt<Spec = SpecId, Block = BlockEnv, Tx = TxEnv>:
     fn snapshot_state(
         &mut self,
         journaled_state: &JournaledState,
-        evm_env: &EvmEnv<Spec, Block>,
+        evm_env: &EvmEnv<SPEC, BLOCK>,
     ) -> U256;
 
     /// Reverts the snapshot if it exists
@@ -109,8 +109,8 @@ pub trait DatabaseExt<Spec = SpecId, Block = BlockEnv, Tx = TxEnv>:
         &mut self,
         id: U256,
         journaled_state: &JournaledState,
-        evm_env: &mut EvmEnv<Spec, Block>,
-        tx_env: &mut Tx,
+        evm_env: &mut EvmEnv<SPEC, BLOCK>,
+        tx_env: &mut TX,
         action: RevertStateSnapshotAction,
     ) -> Option<JournaledState>;
 
@@ -129,8 +129,8 @@ pub trait DatabaseExt<Spec = SpecId, Block = BlockEnv, Tx = TxEnv>:
     fn create_select_fork(
         &mut self,
         fork: CreateFork,
-        evm_env: &mut EvmEnv<Spec, Block>,
-        tx_env: &mut Tx,
+        evm_env: &mut EvmEnv<SPEC, BLOCK>,
+        tx_env: &mut TX,
         journaled_state: &mut JournaledState,
     ) -> eyre::Result<LocalForkId> {
         let id = self.create_fork(fork)?;
@@ -144,8 +144,8 @@ pub trait DatabaseExt<Spec = SpecId, Block = BlockEnv, Tx = TxEnv>:
     fn create_select_fork_at_transaction(
         &mut self,
         fork: CreateFork,
-        evm_env: &mut EvmEnv<Spec, Block>,
-        tx_env: &mut Tx,
+        evm_env: &mut EvmEnv<SPEC, BLOCK>,
+        tx_env: &mut TX,
         journaled_state: &mut JournaledState,
         transaction: B256,
     ) -> eyre::Result<LocalForkId> {
@@ -176,8 +176,8 @@ pub trait DatabaseExt<Spec = SpecId, Block = BlockEnv, Tx = TxEnv>:
     fn select_fork(
         &mut self,
         id: LocalForkId,
-        evm_env: &mut EvmEnv<Spec, Block>,
-        tx_env: &mut Tx,
+        evm_env: &mut EvmEnv<SPEC, BLOCK>,
+        tx_env: &mut TX,
         journaled_state: &mut JournaledState,
     ) -> eyre::Result<()>;
 
@@ -192,8 +192,8 @@ pub trait DatabaseExt<Spec = SpecId, Block = BlockEnv, Tx = TxEnv>:
         &mut self,
         id: Option<LocalForkId>,
         block_number: u64,
-        evm_env: &mut EvmEnv<Spec, Block>,
-        tx_env: &mut Tx,
+        evm_env: &mut EvmEnv<SPEC, BLOCK>,
+        tx_env: &mut TX,
         journaled_state: &mut JournaledState,
     ) -> eyre::Result<()>;
 
@@ -209,8 +209,8 @@ pub trait DatabaseExt<Spec = SpecId, Block = BlockEnv, Tx = TxEnv>:
         &mut self,
         id: Option<LocalForkId>,
         transaction: B256,
-        evm_env: &mut EvmEnv<Spec, Block>,
-        tx_env: &mut Tx,
+        evm_env: &mut EvmEnv<SPEC, BLOCK>,
+        tx_env: &mut TX,
         journaled_state: &mut JournaledState,
     ) -> eyre::Result<()>;
 
@@ -219,19 +219,19 @@ pub trait DatabaseExt<Spec = SpecId, Block = BlockEnv, Tx = TxEnv>:
         &mut self,
         id: Option<LocalForkId>,
         transaction: B256,
-        evm_env: EvmEnv<Spec, Block>,
-        tx_env: Tx,
+        evm_env: EvmEnv<SPEC, BLOCK>,
+        tx_env: TX,
         journaled_state: &mut JournaledState,
-        inspector: &mut dyn EthInspectorExt,
+        inspector: &mut dyn EthInspectorExt<BLOCK, TX, SPEC>,
     ) -> eyre::Result<()>;
 
     /// Executes a given TransactionRequest, commits the new state to the DB
     fn transact_from_tx(
         &mut self,
         transaction: &TransactionRequest,
-        evm_env: EvmEnv<Spec, Block>,
+        evm_env: EvmEnv<SPEC, BLOCK>,
         journaled_state: &mut JournaledState,
-        inspector: &mut dyn EthInspectorExt,
+        inspector: &mut dyn EthInspectorExt<BLOCK, TX, SPEC>,
     ) -> eyre::Result<()>;
 
     /// Returns the `ForkId` that's currently used in the database, if fork mode is on
@@ -389,40 +389,6 @@ pub trait DatabaseExt<Spec = SpecId, Block = BlockEnv, Tx = TxEnv>:
 }
 
 struct _ObjectSafe(dyn DatabaseExt);
-
-/// Extension trait for [`Journal`] providing borrow splitting and state replacement.
-///
-/// Generic code accesses the journal via `ctx.journal_mut()` which returns `&mut impl JournalTr`.
-/// This trait adds the ability to split the journal into its database and inner state components,
-/// enabling direct [`DatabaseExt`] method calls with zero-copy borrow splitting.
-pub trait FoundryJournalExt<CTX: ContextTr + ?Sized>: JournalExt {
-    /// The database type backing this journal.
-    type DB: DatabaseExt<<CTX::Cfg as Cfg>::Spec, CTX::Block, CTX::Tx>;
-
-    /// Returns mutable references to the database and journal inner state.
-    fn as_db_and_inner(&mut self) -> (&mut Self::DB, &mut JournaledState);
-
-    /// Replaces the journal inner state.
-    ///
-    /// Used by sub-EVM execution to write back modified state after running a closure.
-    fn set_inner(&mut self, inner: JournaledState);
-}
-
-impl<DB, CTX> FoundryJournalExt<CTX> for Journal<DB, JournalEntry>
-where
-    CTX: ContextTr + ?Sized,
-    DB: DatabaseExt<<CTX::Cfg as Cfg>::Spec, CTX::Block, CTX::Tx>,
-{
-    type DB = DB;
-
-    fn as_db_and_inner(&mut self) -> (&mut DB, &mut JournaledState) {
-        (&mut self.database, &mut self.inner)
-    }
-
-    fn set_inner(&mut self, inner: JournaledState) {
-        self.inner = inner;
-    }
-}
 
 /// Provides the underlying `revm::Database` implementation.
 ///
@@ -815,7 +781,7 @@ impl Backend {
         inspector: I,
     ) -> eyre::Result<ResultAndState> {
         self.initialize(evm_env.cfg_env.spec, tx_env.caller, tx_env.kind);
-        let mut evm = crate::evm::new_evm_with_inspector(
+        let mut evm = crate::evm::new_eth_evm_with_inspector(
             self,
             evm_env.to_owned(),
             tx_env.to_owned(),
@@ -1376,7 +1342,8 @@ impl DatabaseExt for Backend {
 
         let res = {
             let mut db = self.clone();
-            let mut evm = new_evm_with_inspector(&mut db, evm_env, tx_env.to_owned(), inspector);
+            let mut evm =
+                new_eth_evm_with_inspector(&mut db, evm_env, tx_env.to_owned(), inspector);
             evm.journaled_state.depth = journaled_state.depth + 1;
             evm.transact(tx_env)?
         };
@@ -1917,13 +1884,13 @@ impl Default for BackendInner {
 
 /// This updates the currently used env with the fork's environment
 pub(crate) fn update_current_env_with_fork_env<
-    Spec,
-    Block: FoundryBlock,
-    Tx: FoundryTransaction,
+    SPEC,
+    BLOCK: FoundryBlock,
+    TX: FoundryTransaction,
 >(
-    evm_env: &mut EvmEnv<Spec, Block>,
-    tx_env: &mut Tx,
-    fork_evm_env: EvmEnv<Spec, Block>,
+    evm_env: &mut EvmEnv<SPEC, BLOCK>,
+    tx_env: &mut TX,
+    fork_evm_env: EvmEnv<SPEC, BLOCK>,
 ) {
     tx_env.set_chain_id(Some(fork_evm_env.cfg_env.chain_id));
     *evm_env = fork_evm_env;
@@ -2004,8 +1971,8 @@ fn is_contract_in_state(evm_state: &EvmState, acc: Address) -> bool {
 }
 
 /// Updates the evm env's block with the block's data
-fn update_env_block<Spec, Block: FoundryBlock>(
-    evm_env: &mut EvmEnv<Spec, Block>,
+fn update_env_block<SPEC, BLOCK: FoundryBlock>(
+    evm_env: &mut EvmEnv<SPEC, BLOCK>,
     header: &impl BlockHeader,
 ) {
     let block_env = &mut evm_env.block_env;
@@ -2049,7 +2016,7 @@ fn commit_transaction(
         let depth = journaled_state.depth;
         let mut db = Backend::new_with_fork(fork_id, fork, journaled_state)?;
 
-        let mut evm = crate::evm::new_evm_with_inspector(
+        let mut evm = crate::evm::new_eth_evm_with_inspector(
             &mut db as _,
             evm_env.to_owned(),
             tx_env.to_owned(),
